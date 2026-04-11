@@ -1,0 +1,134 @@
+
+# %%
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# %%
+# Load the data from both the gene expression and metadata files
+data = pd.read_csv(
+    '../Data/TRAINING_SET_GSE62944_subsample_log2TPM.csv', index_col=0, header=0)
+
+metadata_df = pd.read_csv(
+    '../Data/TRAINING_SET_GSE62944_metadata.csv', index_col=0, header=0)
+
+# print the first few rows of this gene expression data
+print(data.head())
+
+# %%
+# Here the data is explored by looking at its shape, info and summary stats.
+print(data.shape)
+print(data.info())
+print(data.describe())
+
+# %%
+# Explore the metadata to see the sample characteristics
+print(metadata_df.info())
+print(metadata_df.describe())
+
+# %%
+# Subset the data for specific cancer types (GBM and LGG)
+cancer_types = ['GBM', 'LGG']
+
+# cancer_samples has the sample IDs for the selected GBM and LGG samples
+cancer_samples = metadata_df[metadata_df['cancer_type'].isin(cancer_types)].index
+print("Selected samples:", cancer_samples)
+
+# Subset expression data
+subset_data = data[cancer_samples]
+
+# %%
+# Subset by index with genes of interest
+desired_gene_list = [
+    'MKI67','CDK1','CDK2','AURKA','AURKB',
+    'EGFR','AKT1'
+]
+
+# Check which genes are present
+gene_list = [gene for gene in desired_gene_list if gene in subset_data.index]
+
+for gene in desired_gene_list:
+    if gene not in gene_list:
+        print(f"Warning: {gene} not found in the dataset.")
+
+print("Genes found in dataset:", gene_list)
+
+# Subset to selected genes
+subset_gene_data = subset_data.loc[gene_list]
+print(subset_gene_data.head())
+
+# %%
+# Basic statistics on the subsetted data
+####################################################
+print(subset_gene_data.describe())
+
+# Variance across samples for each gene
+print("Variance per gene:")
+print(subset_gene_data.var(axis=1))
+
+# Mean expression across samples
+print("Mean expression per gene:")
+print(subset_gene_data.mean(axis=1))
+
+# Median expression
+print("Median expression per gene:")
+print(subset_gene_data.median(axis=1))
+
+# %%
+# Compare GBM vs LGG expression
+####################################################
+GBM_ids = metadata_df[metadata_df['cancer_type'] == 'GBM'].index
+LGG_ids = metadata_df[metadata_df['cancer_type'] == 'LGG'].index
+
+print("\nMean expression in GBM vs LGG:")
+
+for gene in gene_list:
+    gbm_mean = data.loc[gene, GBM_ids].mean()
+    lgg_mean = data.loc[gene, LGG_ids].mean()
+    print(f"{gene}: GBM={gbm_mean:.2f}, LGG={lgg_mean:.2f}")
+
+# %%
+# Explore categorical variables in metadata
+####################################################
+print(metadata_df.groupby('cancer_type')["gender"].value_counts())
+
+# Explore average age at diagnosis
+metadata_df['age_at_diagnosis'] = pd.to_numeric(
+    metadata_df['age_at_diagnosis'], errors='coerce')
+
+print(metadata_df.groupby('cancer_type')["age_at_diagnosis"].mean())
+
+# %%
+# Merging datasets
+####################################################
+# Merge gene expression with metadata for selected samples
+subset_metadata = metadata_df.loc[cancer_samples]
+
+merged_df = subset_gene_data.T.merge(
+    subset_metadata,
+    left_index=True,
+    right_index=True
+)
+
+print(merged_df.head())
+
+# %%
+# Plotting
+####################################################
+# Boxplot: MKI67 expression by cancer type
+sns.boxplot(data=merged_df, x="cancer_type", y='MKI67')
+plt.title("MKI67 Expression: GBM vs LGG")
+plt.show()
+
+# Boxplot: multiple genes
+merged_df[gene_list].plot.box()
+plt.title("Distribution of Proliferation and Signaling Genes")
+plt.xticks(rotation=45)
+plt.show()
+
+# Scatterplot: relationship between two genes
+sns.scatterplot(data=merged_df, x="MKI67", y="CDK1", hue="cancer_type")
+plt.title("MKI67 vs CDK1 Expression")
+plt.show()
+
+# %%
