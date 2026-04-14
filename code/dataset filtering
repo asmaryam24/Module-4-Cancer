@@ -12,6 +12,8 @@ data = pd.read_csv(
 metadata_df = pd.read_csv(
     '../Data/TRAINING_SET_GSE62944_metadata.csv', index_col=0, header=0)
 
+gene_data = pd.read_table(r'C:\Users\Asma Sanaullah\OneDrive - University of Virginia\Spring 2026\COMP BME\Module-4-Cancer\data\Menyhart_JPA_CancerHallmarks_core.txt')
+
 # print the first few rows of this gene expression data
 print(data.head())
 
@@ -39,11 +41,14 @@ subset_data = data[cancer_samples]
 
 # %%
 # Subset by index with genes of interest
-desired_gene_list = [
-    'MKI67','CDK1','CDK2','AURKA','AURKB',
-    'EGFR','AKT1'
-]
+#desired_gene_list = [
+   # 'MKI67','CDK1','CDK2','AURKA','AURKB',
+   # 'EGFR','AKT1'
+#]
 
+#access gene_data to get genes in line 9
+desired_gene_list = gene_data.iloc[7].tolist()  # Convert the row to a list of gene names
+print("Desired genes:", desired_gene_list)
 # Check which genes are present
 gene_list = [gene for gene in desired_gene_list if gene in subset_data.index]
 
@@ -121,10 +126,10 @@ plt.title("MKI67 Expression: GBM vs LGG")
 plt.show()
 
 # Boxplot: multiple genes
-merged_df[gene_list].plot.box()
-plt.title("Distribution of Proliferation and Signaling Genes")
-plt.xticks(rotation=45)
-plt.show()
+#merged_df[gene_list].plot.box()
+#plt.title("Distribution of Proliferation and Signaling Genes")
+#plt.xticks(rotation=45)
+#plt.show()
 
 # Scatterplot: relationship between two genes
 sns.scatterplot(data=merged_df, x="MKI67", y="CDK1", hue="cancer_type")
