@@ -121,7 +121,7 @@ print(merged_df.head())
 # Plotting
 ####################################################
 # Boxplot: MKI67 expression by cancer type
-sns.boxplot(data=merged_df, x="cancer_type", y='MKI67')
+sns.boxplot(data=merged_df, x="cancer_type", y='RIPK1')
 plt.title("MKI67 Expression: GBM vs LGG")
 plt.show()
 
@@ -132,7 +132,7 @@ plt.show()
 #plt.show()
 
 # Scatterplot: relationship between two genes
-sns.scatterplot(data=merged_df, x="MKI67", y="CDK1", hue="cancer_type")
+sns.scatterplot(data=merged_df, x="RIPK1", y="CDC25B", hue="cancer_type")
 plt.title("MKI67 vs CDK1 Expression")
 plt.show()
 
