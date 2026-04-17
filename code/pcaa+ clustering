@@ -24,16 +24,29 @@ plt.ylabel("Principal Component 2")
 plt.legend(title="Species")
 plt.show()
 
+X = merged_df[gene_list]
+pca = PCA(n_components=2)
+X_pca = pca.fit_transform(X)
+
+plt.figure(figsize=(8, 6))
+
+sns.scatterplot(x=X_pca[:, 0],
+                y=X_pca[:, 1],
+                hue=df['CancerType'],   # GBM or LGG column
+                palette="Set2",
+                s=100)
+
+plt.title("PCA of GBM vs LGG Proliferative Signaling Genes")
+plt.xlabel("Principal Component 1")
+plt.ylabel("Principal Component 2")
+plt.legend(title="Cancer Type")
+plt.show()
 
 #genes are feaatures, run pca on all cancer samples, color pca by cancer
 
 #how to run pca:
 #1. standardize data
 #2. fit pca model
-
-#fit pca model by:
-pca = PCA(n_components=2)
-X_pca = pca.fit_transform(X)
 
 
 #only need to define x
