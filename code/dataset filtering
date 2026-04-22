@@ -10,6 +10,12 @@ from sklearn.cluster import KMeans
 from sklearn.datasets import load_iris
 import seaborn as sns
 from sklearn.decomposition import PCA
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from sklearn.linear_model import LogisticRegression
 
 # %%
 # Load the data from both the gene expression and metadata files
@@ -181,5 +187,85 @@ plt.xlabel("PC1 (overall proliferative signaling)") # this axis represents the d
 plt.ylabel("PC2 (secondary variation)") # this axis represents the second biggest independent source of variation, differences between samples that are NOT explained by PC1
 plt.title("KMeans Clustering of GBM vs LGG (PCA Space)")
 
+plt.show()
+
+# %%
+#classification 
+
+# load validation data
+validation_data = pd.read_csv(
+    r'C:\Users\Asma Sanaullah\OneDrive - University of Virginia\Spring 2026\COMP BME\Module-4-Cancer\data\VALIDATION_SET_GSE62944_subsample_log2TPM.csv',
+    index_col=0,
+    header=0
+)
+
+validation_metadata = pd.read_csv(
+    r'C:\Users\Asma Sanaullah\OneDrive - University of Virginia\Spring 2026\COMP BME\Module-4-Cancer\data\VALIDATION_SET_GSE62944_metadata.csv',
+    index_col=0,
+    header=0
+)
+
+validation_samples = validation_metadata[
+    validation_metadata["cancer_type"].isin(["GBM", "LGG"])
+].index
+
+# subset expression data
+validation_subset = validation_data[validation_samples]
+
+# keep only genes of interest
+validation_gene_data = validation_subset.loc[gene_list]
+
+# transpose so rows = samples (IMPORTANT)
+validation_gene_data_T = validation_gene_data.T
+
+# merge with metadata
+validation_merged_df = validation_gene_data_T.merge(
+    validation_metadata.loc[validation_samples],
+    left_index=True,
+    right_index=True
+)
+
+# training data
+X_train = merged_df[gene_list]
+y_train = merged_df["cancer_type"]
+
+# build and fit a logistic regression model
+model = LogisticRegression(penalty=None, max_iter=1000)
+model.fit(X_train, y_train)
+
+# PREDICT AND EVALUATE: 
+X_valid = validation_merged_df[gene_list]
+y_valid = validation_merged_df["cancer_type"]
+
+#predict target variables for the validation set
+y_pred = model.predict(X_valid)
+#evaluate the model's performance on the validation set
+model.predict_proba(X_valid)
+print("probabilities:", model.predict_proba(X_valid))
+model.score(X_valid, y_valid)
+print("Validation Accuracy:", model.score(X_valid, y_valid))
+
+# %%
+# Train model
+model = LogisticRegression(penalty=None, max_iter=1000)
+model.fit(merged_df[gene_list], merged_df["cancer_type"])
+
+# Predict on training set (or validation set if you prefer)
+y_pred = model.predict(merged_df[gene_list])
+
+# Plot in PCA space
+plt.figure(figsize=(8,6))
+
+sns.scatterplot(
+    x=X_pca[:, 0],
+    y=X_pca[:, 1],
+    hue=y_pred,   # predicted labels
+    palette="Set1",
+    s=100
+)
+
+plt.title("Logistic Regression Predictions on PCA Space")
+plt.xlabel("PC1")
+plt.ylabel("PC2")
 plt.show()
 # %%
