@@ -42,16 +42,16 @@ print(metadata_df.info())
 print(metadata_df.describe())
 
 # %%
-# Subset the data for specific cancer types (GBM and LGG)
-cancer_types = ['GBM', 'LGG']
-
-# cancer_samples has the sample IDs for the selected GBM and LGG samples
-cancer_samples = metadata_df[metadata_df['cancer_type'].isin(cancer_types)].index
+# Subset the data
+cancer_samples = metadata_df.index
 print("Selected samples:", cancer_samples)
 
-# Subset expression data
 subset_data = data[cancer_samples]
 
+# Create 3-class labels
+metadata_df["class_label"] = metadata_df["cancer_type"].apply(
+    lambda x: x if x in ["GBM", "LGG"] else "Neither"
+)
 
 # %%
 # Subset by index with genes of interest
@@ -76,22 +76,7 @@ print("Genes found in dataset:", gene_list)
 subset_gene_data = subset_data.loc[gene_list]
 print(subset_gene_data.head())
 
-# %%
-# Basic statistics on the subsetted data
-####################################################
-print(subset_gene_data.describe())
 
-# Variance across samples for each gene
-print("Variance per gene:")
-print(subset_gene_data.var(axis=1))
-
-# Mean expression across samples
-print("Mean expression per gene:")
-print(subset_gene_data.mean(axis=1))
-
-# Median expression
-print("Median expression per gene:")
-print(subset_gene_data.median(axis=1))
 
 # %%
 # Compare GBM vs LGG expression
@@ -126,69 +111,6 @@ merged_df = subset_gene_data.T.merge(
 
 print(merged_df.head())
 
-# %%
-# Plotting
-####################################################
-# Boxplot: RIPK1 expression by cancer type
-sns.boxplot(data=merged_df, x="cancer_type", y='RIPK1')
-plt.title("RIPK1 Expression: GBM vs LGG")
-plt.show()
-
-# Scatterplot: relationship between two genes
-sns.scatterplot(data=merged_df, x="RIPK1", y="CDC25B", hue="cancer_type")
-plt.title("RIPK1 vs CDK1 Expression")
-plt.show()
-
-# %%
-#PCA
-X = merged_df[gene_list] # X is the gene expression data for the selected genes
-# X matrix of gene expression values where Rows = cancer samples and columns = proliferative signaling genes
-
-pca = PCA(n_components=2) 
-# 2 principal components: PC1 = the direction where samples differ the most overall and PC2 = second biggest independent source of variation
-
-X_pca = pca.fit_transform(X) #axes of highest variance(pca.fit()) and rotate the data to view it from the new axes
-
-plt.figure(figsize=(8, 6))
-
-sns.scatterplot(
-    x=X_pca[:, 0],
-    y=X_pca[:, 1],
-    hue=merged_df['cancer_type'],
-    palette="Set2",
-    s=100
-)
-
-# this displays the PCA plot 
-# each dot is a cancer sample
-plt.title("PCA of GBM vs LGG Proliferative Signaling Genes")
-plt.xlabel("Principal Component 1")
-plt.ylabel("Principal Component 2")
-plt.legend(title="Cancer Type")
-plt.show()
-
-
-# %%
-#clustering
-X = X_pca 
-
-model = KMeans(n_clusters=2, random_state=0) # uses k-means modeling
-model.fit(X)
-
-y_pred = model.predict(X)
-
-plt.figure(figsize=(8, 6))
-
-plt.scatter(X_pca[:, 0], X_pca[:, 1],
-            c=y_pred,
-            cmap="Set2",
-            s=100)
-
-plt.xlabel("PC1 (overall proliferative signaling)") # this axis represents the direction of highest variance
-plt.ylabel("PC2 (secondary variation)") # this axis represents the second biggest independent source of variation, differences between samples that are NOT explained by PC1
-plt.title("KMeans Clustering of GBM vs LGG (PCA Space)")
-
-plt.show()
 
 # %%
 #classification 
@@ -206,9 +128,11 @@ validation_metadata = pd.read_csv(
     header=0
 )
 
-validation_samples = validation_metadata[
-    validation_metadata["cancer_type"].isin(["GBM", "LGG"])
-].index
+validation_samples = validation_metadata.index
+
+validation_metadata["class_label"] = validation_metadata["cancer_type"].apply(
+    lambda x: x if x in ["GBM", "LGG"] else "Neither"
+)
 
 # subset expression data
 validation_subset = validation_data[validation_samples]
@@ -228,15 +152,19 @@ validation_merged_df = validation_gene_data_T.merge(
 
 # training data
 X_train = merged_df[gene_list]
-y_train = merged_df["cancer_type"]
+y_train = merged_df["class_label"]
 
 # build and fit a logistic regression model
-model = LogisticRegression(penalty=None, max_iter=1000)
+model = LogisticRegression(
+    penalty=None,
+    max_iter=1000,
+    multi_class="multinomial"
+)
 model.fit(X_train, y_train)
 
 # PREDICT AND EVALUATE: 
 X_valid = validation_merged_df[gene_list]
-y_valid = validation_merged_df["cancer_type"]
+y_valid = validation_merged_df["class_label"]
 
 #predict target variables for the validation set
 y_pred = model.predict(X_valid)
@@ -249,19 +177,6 @@ print("Predicted labels for validation set:", y_pred)
 print("True labels for validation set:", y_valid.values)
 
 # %%
-
-#printing gbm  counts in training sets 
-print("GBM count in training metadata:", metadata_df["cancer_type"].value_counts().get("GBM", 0))
-print("GBM count in merged training dataframe:", merged_df["cancer_type"].value_counts().get("GBM", 0))
-
-print(validation_metadata["cancer_type"].value_counts())
-print(validation_merged_df["cancer_type"].value_counts())
-
-#printing GBM counts
-print("GBM count in validation metadata:", validation_metadata["cancer_type"].value_counts().get("GBM", 0))
-print("GBM count in merged validation dataframe:", validation_merged_df["cancer_type"].value_counts().get("GBM", 0))
-
-#training has 80% of sample, validation has 10 and tesst has 10 
 
 #see if test has any data for GBM, 
 test_metadata = pd.read_csv(
@@ -282,25 +197,39 @@ print(test_metadata["cancer_type"].value_counts())
 #confusion matrix to determine if model performs well on validation dataset 
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
-cm = confusion_matrix(y_valid, y_pred, labels=model.classes_)
-disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=model.classes_)
-disp.plot(cmap=plt.cm.Blues)
+cm = confusion_matrix(
+    y_valid,
+    y_pred,
+    labels=["GBM", "LGG", "Neither"]
+)
 
-plt.title("Confusion Matrix: Logistic Regression on Validation Set")
+disp = ConfusionMatrixDisplay(
+    confusion_matrix=cm,
+    display_labels=["GBM", "LGG", "Neither"]
+)
+
+disp.plot(cmap="Blues")
+plt.title("3-Class Confusion Matrix")
 plt.show()
+
 
 
 #%% 
 #report in sammple error on traning set
+
+# In-sample performance (training set)
 train_accuracy = model.score(X_train, y_train)
+train_error = 1 - train_accuracy
+
 print("Training Accuracy:", train_accuracy)
-#report out of sample error on validation set
+print("In-Sample Error:", train_error)
+
+# Out-of-sample performance (validation set)
 validation_accuracy = model.score(X_valid, y_valid)
+validation_error = 1 - validation_accuracy
+
 print("Validation Accuracy:", validation_accuracy)
-
-
-
-
+print("Out-of-Sample Error:", validation_error)
 
 
 # %%
