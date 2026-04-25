@@ -122,6 +122,7 @@ validation_data = pd.read_csv(
     header=0
 )
 
+# load validation metadata
 validation_metadata = pd.read_csv(
     r'C:\Users\Asma Sanaullah\OneDrive - University of Virginia\Spring 2026\COMP BME\Module-4-Cancer\data\VALIDATION_SET_GSE62944_metadata.csv',
     index_col=0,
@@ -130,6 +131,7 @@ validation_metadata = pd.read_csv(
 
 validation_samples = validation_metadata.index
 
+# Create 3-class labels for validation metadata, these include GBM, LGG and Neither (for samples that are not GBM or LGG)
 validation_metadata["class_label"] = validation_metadata["cancer_type"].apply(
     lambda x: x if x in ["GBM", "LGG"] else "Neither"
 )
@@ -163,13 +165,14 @@ model = LogisticRegression(
 model.fit(X_train, y_train)
 
 # PREDICT AND EVALUATE: 
+#subset validation data to genes of interest and class labels
 X_valid = validation_merged_df[gene_list]
 y_valid = validation_merged_df["class_label"]
 
 #predict target variables for the validation set
 y_pred = model.predict(X_valid)
 #evaluate the model's performance on the validation set
-model.score(X_valid, y_valid)
+model.score(X_valid, y_valid) # this gives the accuracy of the model on the validation set
 print("Validation Accuracy:", model.score(X_valid, y_valid))
 
 #compare predicted labels to true labels
@@ -197,18 +200,21 @@ print(test_metadata["cancer_type"].value_counts())
 #confusion matrix to determine if model performs well on validation dataset 
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
+# create confusion matrix for 3 classes: GBM, LGG and Neither
 cm = confusion_matrix(
     y_valid,
     y_pred,
     labels=["GBM", "LGG", "Neither"]
 )
 
+# display confusion matrix
 disp = ConfusionMatrixDisplay(
     confusion_matrix=cm,
     display_labels=["GBM", "LGG", "Neither"]
 )
 
-disp.plot(cmap="Blues")
+# plot confusion matrix
+disp.plot(cmap="Greens")
 plt.title("3-Class Confusion Matrix")
 plt.show()
 
@@ -218,18 +224,24 @@ plt.show()
 #report in sammple error on traning set
 
 # In-sample performance (training set)
-train_accuracy = model.score(X_train, y_train)
-train_error = 1 - train_accuracy
+
+# Calculate training accuracy and error
+train_accuracy = model.score(X_train, y_train) # this gives the accuracy of the model on the training set
+train_error = 1 - train_accuracy # this gives the in-sample error (1 - accuracy)
 
 print("Training Accuracy:", train_accuracy)
 print("In-Sample Error:", train_error)
 
 # Out-of-sample performance (validation set)
-validation_accuracy = model.score(X_valid, y_valid)
-validation_error = 1 - validation_accuracy
+
+# Calculate validation accuracy and error
+validation_accuracy = model.score(X_valid, y_valid) # this gives the accuracy of the model on the validation set
+validation_error = 1 - validation_accuracy # this gives the out-of-sample error (1 - accuracy)
 
 print("Validation Accuracy:", validation_accuracy)
 print("Out-of-Sample Error:", validation_error)
+
+# out of sample means how well the model performs on data it has not seen before (validation set), while in-sample refers to how well the model fits the training data. A large gap between training and validation performance may indicate overfitting, where the model captures noise in the training data rather than general patterns that apply to new data.
 
 
 # %%
