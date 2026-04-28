@@ -285,6 +285,67 @@ disp.plot(cmap="Blues")
 plt.title("3-Class Confusion Matrix for Improved Model")
 plt.show()
 
+
+#%%
+
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import confusion_matrix
+
+#testing different regularization methods for logistic regression
+models = {
+    "Ridge (L2)": LogisticRegression(
+        penalty="l2",
+        C=1.0,
+        class_weight="balanced",
+        max_iter=1000,
+        multi_class="multinomial"
+    ),
+
+    "Lasso (L1)": LogisticRegression(
+        penalty="l1",
+        solver="saga",
+        C=1.0,
+        class_weight="balanced",
+        max_iter=2000,
+        multi_class="multinomial"
+    ),
+
+    "Elastic Net": LogisticRegression(
+        penalty="elasticnet",
+        solver="saga",
+        l1_ratio=0.5,          # 50% L1 + 50% L2
+        C=1.0,
+        class_weight="balanced",
+        max_iter=2000,
+        multi_class="multinomial"
+    )
+}
+
+for name, clf in models.items():
+
+    model = make_pipeline(
+        StandardScaler(),
+        clf
+    )
+
+    # train model
+    model.fit(X_train, y_train)
+
+    # predict validation/test set
+    y_pred = model.predict(X_valid)
+
+    # scores
+    accuracy = model.score(X_valid, y_valid)
+    error = 1 - accuracy
+
+    print("\n==============================")
+    print(name)
+    print("==============================")
+    print("Accuracy:", accuracy)
+    print("Error:", error)
+
 #%%
 #test data
 # load test data
