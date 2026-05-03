@@ -1,4 +1,7 @@
 #%%
+
+#import needed libraries
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,16 +17,22 @@ from sklearn.metrics import accuracy_score
 
 
 #%%
+
+# this code block loads the data and prints the shape and info of the training data + metadata
+
+# Load the data
 data = pd.read_csv(
     '../Data/TRAINING_SET_GSE62944_subsample_log2TPM.csv',
     index_col=0
 )
 
+# Load the metadata
 metadata_df = pd.read_csv(
     '../Data/TRAINING_SET_GSE62944_metadata.csv',
     index_col=0
 )
 
+# load the gene data
 gene_data = pd.read_table(
     r'C:\Users\Asma Sanaullah\OneDrive - University of Virginia\Spring 2026\COMP BME\Module-4-Cancer\data\Menyhart_JPA_CancerHallmarks_core.txt'
 )
@@ -33,20 +42,26 @@ print(metadata_df.info())
 
 
 #%%
-desired_gene_list = gene_data.iloc[7].tolist()
-gene_list = [g for g in desired_gene_list if g in data.index]
 
-print("Genes used:", len(gene_list))
+# this code block extracts the specific genes we want to use for the cancer hallmark proliferative signaling
+
+desired_gene_list = gene_data.iloc[7].tolist() #proliferative signaling genes in the gene data
+gene_list = [g for g in desired_gene_list if g in data.index] # filter to only include genes present in the data
+
+print("Proliferative Signaling Genes:", len(gene_list)) 
 
 #%%
-cancer_types = ["GBM", "LGG"]
+
+# this code block creates a subset of the data for just GBM and LGG samples, then merges it with the metadata for those samples
+
+cancer_types = ["GBM", "LGG"] # 2 specific cancer types GBM & LGG
 
 cancer_samples = metadata_df[
     metadata_df["cancer_type"].isin(cancer_types)
 ].index
 
-subset_data_2c = data[cancer_samples]
-subset_gene_data_2c = subset_data_2c.loc[gene_list]
+subset_data_2c = data[cancer_samples] # subset the data to only include the samples of interest (GBM and LGG)
+subset_gene_data_2c = subset_data_2c.loc[gene_list] # subset the data to only include the genes of interest (proliferative signaling genes)
 
 merged_2c = subset_gene_data_2c.T.merge(
     metadata_df.loc[cancer_samples],
@@ -58,6 +73,9 @@ print("2-class shape:", merged_2c.shape)
 
 
 #%%
+
+# this code block performs some basic exploratory data analysis on the subsetted data for GBM and LGG samples, including summary statistics 
+
 print(subset_gene_data_2c.describe())
 
 print("Variance per gene:")
@@ -71,6 +89,8 @@ print(metadata_df.groupby('cancer_type')["gender"].value_counts())
 
 #%%
 
+# this code block calculates the average expression of each gene in the gene list for GBM and LGG samples, and prints the results
+
 GBM_ids = metadata_df[metadata_df['cancer_type'] == 'GBM'].index
 LGG_ids = metadata_df[metadata_df['cancer_type'] == 'LGG'].index
 
@@ -82,21 +102,26 @@ for gene in gene_list:
 
 
 #%%%
-sns.boxplot(data=merged_2c, x="cancer_type", y='RIPK1')
+
+
+sns.boxplot(data=merged_2c, x="cancer_type", y='RIPK1') # this creates a boxplot comparing the expression of the gene RIPK1 between GBM and LGG samples
 plt.title("RIPK1 Expression: GBM vs LGG")
 plt.show()
 
-sns.scatterplot(data=merged_2c, x="RIPK1", y="CDC25B", hue="cancer_type")
+sns.scatterplot(data=merged_2c, x="RIPK1", y="CDC25B", hue="cancer_type") # this creates a scatterplot comparing the expression of the gene RIPK1 vs CDC25B, colored by cancer type (GBM vs LGG)
 plt.title("RIPK1 vs CDC25B")
 plt.show()
 
 
 
 #%%
+
+# this code block performs PCA on the subsetted data for GBM and LGG samples, and visualizes the results in a scatterplot colored by cancer type
+
 X_2c = merged_2c[gene_list]
 
-pca = PCA(n_components=2)
-X_pca = pca.fit_transform(X_2c)
+pca = PCA(n_components=2) # this initializes a PCA object to reduce the dimensionality of the data to 2 principal components
+X_pca = pca.fit_transform(X_2c) # this fits the PCA model to the data and transforms it into the PCA space
 
 sns.scatterplot(
     x=X_pca[:, 0],
@@ -112,8 +137,11 @@ plt.show()
 
 
 #%%
-kmeans = KMeans(n_clusters=2, random_state=0)
-clusters = kmeans.fit_predict(X_pca)
+
+# this code block performs KMeans clustering on the PCA-transformed data, and visualizes the results in a scatterplot colored by cluster/cancer type
+
+kmeans = KMeans(n_clusters=2, random_state=0) # this performs clustering with 2 clusters (GBM and LGG) 
+clusters = kmeans.fit_predict(X_pca) # this fits the KMeans model to the PCA-transformed data and assigns cluster labels to each sample
 
 plt.scatter(X_pca[:, 0], X_pca[:, 1], c=clusters, cmap="Set2")
 plt.title("KMeans Clustering (PCA Space)")
@@ -123,6 +151,10 @@ plt.show()
 
 
 #%%
+
+# this code block creates a new class label in the metadata for a 3-class classification problem (GBM, LGG, Neither), then merges the full gene data with the metadata for all samples
+
+# create a new class label that categorizes samples as GBM, LGG, or Neither (for samples that are not GBM or LGG - non glioma)
 metadata_df["class_label"] = metadata_df["cancer_type"].apply(
     lambda x: x if x in ["GBM", "LGG"] else "Neither"
 )
@@ -136,13 +168,27 @@ merged_3c = subset_gene_all.T.merge(
     right_index=True
 )
 
-X_train = merged_3c[gene_list]
-y_train = merged_3c["class_label"]
+X_train = merged_3c[gene_list] # this creates the feature matrix X for training data, which consists of the expression values of the genes in the gene list
+y_train = merged_3c["class_label"] # this creates the target vector y for training data, which consists of the class labels (GBM, LGG, Neither) for each sample
 
 print("3-class training shape:", X_train.shape)
 
+#%%
+# fitting logistic regression model to the training data for 2 classes only and evaluating its accuracy
+
+logreg_model_2c = LogisticRegression(
+    penalty=None,
+    max_iter=1000,
+    multi_class="multinomial"
+)
+logreg_model_2c.fit(X_2c, merged_2c["cancer_type"])
+
+
 
 #%%
+
+# this code block loads the validation data and metadata, creates the same 3-class label for the validation metadata, subsets the validation data to just the genes in the gene list
+
 validation_data = pd.read_csv(
     r'C:\Users\Asma Sanaullah\OneDrive - University of Virginia\Spring 2026\COMP BME\Module-4-Cancer\data\VALIDATION_SET_GSE62944_subsample_log2TPM.csv',
     index_col=0
@@ -166,33 +212,44 @@ val_merged = val_gene.T.merge(
     right_index=True
 )
 
-X_valid = val_merged[gene_list]
-y_valid = val_merged["class_label"]
+X_valid = val_merged[gene_list] # this creates the feature matrix X for validation data, which consists of the expression values of the genes in the gene list
+y_valid = val_merged["class_label"] # this creates the target vector y for validation data, which consists of the class labels (GBM, LGG, Neither) for each sample
 
 
 #%%
-baseline_model = LogisticRegression(
-    penalty=None,
-    max_iter=1000,
-    multi_class="multinomial"
+
+# this code block creates a basic logistic regression model that fits to the training data for 3 classes and determines it's accuracy
+
+# logistric regression model with multinomial option for multi-class classification
+model_base = make_pipeline(
+    StandardScaler(),
+    LogisticRegression(
+        penalty=None,
+        max_iter=2000,
+        class_weight="balanced",
+        multi_class="multinomial"
+    )
 )
+model_base.fit(X_train, y_train)
+y_pred_base = model_base.predict(X_valid)
+print("Base Model Accuracy:", model_base.score(X_valid, y_valid))
 
-baseline_model.fit(X_train, y_train)
-
-y_pred_base = baseline_model.predict(X_valid)
-
-print("Baseline Accuracy:", baseline_model.score(X_valid, y_valid))
 
 
 #%%
-cm = confusion_matrix(y_valid, y_pred_base, labels=["GBM","LGG","Neither"])
+
+# this code block creates a confusion matrix for the initial logistic regression model
+
+cm = confusion_matrix(y_valid, y_pred_base, labels=["GBM","LGG","Neither"]) # this computes the confusion matrix comparing the true labels (y_valid) to the predicted labels (y_pred_base), with the specified class order
 
 ConfusionMatrixDisplay(cm, display_labels=["GBM","LGG","Neither"]).plot()
-plt.title("Baseline Model")
+plt.title("Initial Logistic Regression Model")
 plt.show()
 
 
 #%%
+
+# this code block creates a logistic regression model with L1 regularization, fits it to the training data, evaluates its accuracy on the validation set
 model_l1 = make_pipeline(
     StandardScaler(),
     LogisticRegression(
@@ -212,6 +269,9 @@ print("L1 Accuracy:", model_l1.score(X_valid, y_valid))
 
 
 #%%
+
+# this code block creates a confusion matrix for the L1 regularized logistic regression model
+
 cm = confusion_matrix(y_valid, y_pred_l1, labels=["GBM","LGG","Neither"])
 
 ConfusionMatrixDisplay(cm, display_labels=["GBM","LGG","Neither"]).plot()
@@ -220,6 +280,9 @@ plt.show()
 
 
 #%%
+
+# this code block creates a logistic regression model with L2 regularization, fits it to the training data, evaluates its accuracy on the validation set
+
 model_l2 = make_pipeline(
     StandardScaler(),
     LogisticRegression(
@@ -238,6 +301,9 @@ y_pred_l2 = model_l2.predict(X_valid)
 print("L2 Accuracy:", model_l2.score(X_valid, y_valid))
 
 #%%
+
+# this code block creates a confusion matrix for the L2 regularized logistic regression model
+
 cm = confusion_matrix(y_valid, y_pred_l1, labels=["GBM","LGG","Neither"])
 
 ConfusionMatrixDisplay(cm, display_labels=["GBM","LGG","Neither"]).plot()
@@ -245,6 +311,9 @@ plt.title("L2 Model")
 plt.show()
 
 #%%
+
+# this code block loads the test data and metadata, creates the same 3-class label for the test metadata, subsets the test data to just the genes in the gene list
+
 test_data = pd.read_csv(
     r'C:\Users\Asma Sanaullah\OneDrive - University of Virginia\Spring 2026\COMP BME\Module-4-Cancer\data\TEST_SET_GSE62944_subsample_log2TPM.csv',
     index_col=0
@@ -257,6 +326,9 @@ test_metadata = pd.read_csv(
 
 
 #%%
+
+# this code block creates a subset of the test data for 2 class classification (GBM vs LGG), then merges it with the metadata for those samples
+
 test_samples_2c = test_metadata[
     test_metadata["cancer_type"].isin(["GBM","LGG"])
 ].index
@@ -276,6 +348,9 @@ y_test_2c = test_merged_2c["cancer_type"]
 
 
 #%%
+
+# this code block creates a new class label in the test metadata for a 3-class classification problem (GBM, LGG, Neither), then merges the full gene data with the metadata for all test samples
+
 test_metadata["class_label"] = test_metadata["cancer_type"].apply(
     lambda x: x if x in ["GBM","LGG"] else "Neither"
 )
@@ -294,8 +369,10 @@ y_test_3c = test_merged_3c["class_label"]
 
 
 #%%
-#l1 model evaluation on test set
-y_pred_2c = model_l1.predict(X_test_2c)
+
+# this code block evaluates the L1 regularized logistic regression model on the 2-class test set, calculates accuracy, and creates a confusion matrix
+
+y_pred_2c = model_l1.predict(X_test_2c) # 
 acc_2c = accuracy_score(y_test_2c, y_pred_2c)
 print("2-Class Test Accuracy:", acc_2c)
 cm_2c = confusion_matrix(y_test_2c, y_pred_2c, labels=["GBM", "LGG"])
@@ -307,10 +384,16 @@ plt.title("L1 Model - 2-Class Confusion Matrix")
 plt.show()
 
 # %%
+
+# this code block evaluates the L2 regularized logistic regression model on the 2-class test set, calculates accuracy, and creates a confusion matrix
+
 y_pred_2c = model_l2.predict(X_test_2c)
 
 acc_2c = accuracy_score(y_test_2c, y_pred_2c)
 print("2-Class Test Accuracy:", acc_2c)
+
+out_of_sample_error_2c = 1 - acc_2c
+print(f"Out-of-Sample Error (2-Class Test Accuracy): {out_of_sample_error_2c:.4f}")
 
 cm_2c = confusion_matrix(y_test_2c, y_pred_2c, labels=["GBM", "LGG"])
 
@@ -322,12 +405,36 @@ ConfusionMatrixDisplay(
 plt.title("L2 Model - 2-Class Confusion Matrix")
 plt.show()
 
+#%%
+
+# calculating in and out of sample error for training and validation sets for the initial logistic regression model
+y_pred_train = model_base.predict(X_train)
+y_pred_valid = model_base.predict(X_valid)
+train_acc = accuracy_score(y_train, y_pred_train)
+valid_acc = accuracy_score(y_valid, y_pred_valid)
+# finding the in-sample error (training accuracy) and out-of-sample error (validation accuracy) for the initial logistic regression model, and printing the results
+in_sample_error = 1 - train_acc
+out_of_sample_error = 1 - valid_acc
+print(f"Training Accuracy: {train_acc:.4f}")
+print(f"In-Sample Error (Training Accuracy): {in_sample_error:.4f}")
+print(f"Validation Accuracy: {valid_acc:.4f}")
+print(f"Out-of-Sample Error (Validation Accuracy): {out_of_sample_error:.4f}")
+
+
+
 
 #%%
-# l1 model evaluation on test set
+
+# this code block evaluates the L1 regularized logistic regression model on the 3-class test set, calculates accuracy, and creates a confusion matrix
+
 y_pred_3c = model_l1.predict(X_test_3c)
 acc_3c = accuracy_score(y_test_3c, y_pred_3c)
 print("3-Class Test Accuracy:", acc_3c)
+
+# coding for error out of sample error for 3 class classification
+out_of_sample_error_3c = 1 - acc_3c
+print(f"Out-of-Sample Error (3-Class Test Accuracy): {out_of_sample_error_3c:.4f}")
+
 cm_3c = confusion_matrix(
     y_test_3c,
     y_pred_3c,
@@ -340,6 +447,9 @@ ConfusionMatrixDisplay(
 plt.title("L1 Model - 3-Class Confusion Matrix")
 plt.show()
 # %%
+
+# this code block evaluates the L2 regularized logistic regression model on the 3-class test set, calculates accuracy, and creates a confusion matrix
+
 y_pred_3c = model_l2.predict(X_test_3c)
 
 acc_3c = accuracy_score(y_test_3c, y_pred_3c)
