@@ -1,0 +1,362 @@
+#%%
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import accuracy_score
+
+
+#%%
+data = pd.read_csv(
+    '../Data/TRAINING_SET_GSE62944_subsample_log2TPM.csv',
+    index_col=0
+)
+
+metadata_df = pd.read_csv(
+    '../Data/TRAINING_SET_GSE62944_metadata.csv',
+    index_col=0
+)
+
+gene_data = pd.read_table(
+    r'C:\Users\Asma Sanaullah\OneDrive - University of Virginia\Spring 2026\COMP BME\Module-4-Cancer\data\Menyhart_JPA_CancerHallmarks_core.txt'
+)
+
+print(data.shape)
+print(metadata_df.info())
+
+
+#%%
+desired_gene_list = gene_data.iloc[7].tolist()
+gene_list = [g for g in desired_gene_list if g in data.index]
+
+print("Genes used:", len(gene_list))
+
+#%%
+cancer_types = ["GBM", "LGG"]
+
+cancer_samples = metadata_df[
+    metadata_df["cancer_type"].isin(cancer_types)
+].index
+
+subset_data_2c = data[cancer_samples]
+subset_gene_data_2c = subset_data_2c.loc[gene_list]
+
+merged_2c = subset_gene_data_2c.T.merge(
+    metadata_df.loc[cancer_samples],
+    left_index=True,
+    right_index=True
+)
+
+print("2-class shape:", merged_2c.shape)
+
+
+#%%
+print(subset_gene_data_2c.describe())
+
+print("Variance per gene:")
+print(subset_gene_data_2c.var(axis=1))
+
+print("Mean per gene:")
+print(subset_gene_data_2c.mean(axis=1))
+
+print(metadata_df.groupby('cancer_type')["gender"].value_counts())
+
+
+#%%
+
+GBM_ids = metadata_df[metadata_df['cancer_type'] == 'GBM'].index
+LGG_ids = metadata_df[metadata_df['cancer_type'] == 'LGG'].index
+
+for gene in gene_list:
+    print(
+        f"{gene}: GBM={data.loc[gene, GBM_ids].mean():.2f}, "
+        f"LGG={data.loc[gene, LGG_ids].mean():.2f}"
+    )
+
+
+#%%%
+sns.boxplot(data=merged_2c, x="cancer_type", y='RIPK1')
+plt.title("RIPK1 Expression: GBM vs LGG")
+plt.show()
+
+sns.scatterplot(data=merged_2c, x="RIPK1", y="CDC25B", hue="cancer_type")
+plt.title("RIPK1 vs CDC25B")
+plt.show()
+
+
+
+#%%
+X_2c = merged_2c[gene_list]
+
+pca = PCA(n_components=2)
+X_pca = pca.fit_transform(X_2c)
+
+sns.scatterplot(
+    x=X_pca[:, 0],
+    y=X_pca[:, 1],
+    hue=merged_2c["cancer_type"],
+    palette="Set2"
+)
+
+plt.title("PCA: GBM vs LGG")
+plt.xlabel("PC1")
+plt.ylabel("PC2")
+plt.show()
+
+
+#%%
+kmeans = KMeans(n_clusters=2, random_state=0)
+clusters = kmeans.fit_predict(X_pca)
+
+plt.scatter(X_pca[:, 0], X_pca[:, 1], c=clusters, cmap="Set2")
+plt.title("KMeans Clustering (PCA Space)")
+plt.xlabel("PC1")
+plt.ylabel("PC2")
+plt.show()
+
+
+#%%
+metadata_df["class_label"] = metadata_df["cancer_type"].apply(
+    lambda x: x if x in ["GBM", "LGG"] else "Neither"
+)
+
+subset_all = data[metadata_df.index]
+subset_gene_all = subset_all.loc[gene_list]
+
+merged_3c = subset_gene_all.T.merge(
+    metadata_df,
+    left_index=True,
+    right_index=True
+)
+
+X_train = merged_3c[gene_list]
+y_train = merged_3c["class_label"]
+
+print("3-class training shape:", X_train.shape)
+
+
+#%%
+validation_data = pd.read_csv(
+    r'C:\Users\Asma Sanaullah\OneDrive - University of Virginia\Spring 2026\COMP BME\Module-4-Cancer\data\VALIDATION_SET_GSE62944_subsample_log2TPM.csv',
+    index_col=0
+)
+
+validation_metadata = pd.read_csv(
+    r'C:\Users\Asma Sanaullah\OneDrive - University of Virginia\Spring 2026\COMP BME\Module-4-Cancer\data\VALIDATION_SET_GSE62944_metadata.csv',
+    index_col=0
+)
+
+validation_metadata["class_label"] = validation_metadata["cancer_type"].apply(
+    lambda x: x if x in ["GBM", "LGG"] else "Neither"
+)
+
+val_subset = validation_data[validation_metadata.index]
+val_gene = val_subset.loc[gene_list]
+
+val_merged = val_gene.T.merge(
+    validation_metadata,
+    left_index=True,
+    right_index=True
+)
+
+X_valid = val_merged[gene_list]
+y_valid = val_merged["class_label"]
+
+
+#%%
+baseline_model = LogisticRegression(
+    penalty=None,
+    max_iter=1000,
+    multi_class="multinomial"
+)
+
+baseline_model.fit(X_train, y_train)
+
+y_pred_base = baseline_model.predict(X_valid)
+
+print("Baseline Accuracy:", baseline_model.score(X_valid, y_valid))
+
+
+#%%
+cm = confusion_matrix(y_valid, y_pred_base, labels=["GBM","LGG","Neither"])
+
+ConfusionMatrixDisplay(cm, display_labels=["GBM","LGG","Neither"]).plot()
+plt.title("Baseline Model")
+plt.show()
+
+
+#%%
+model_l1 = make_pipeline(
+    StandardScaler(),
+    LogisticRegression(
+        penalty="l1",
+        solver="saga",
+        max_iter=2000,
+        class_weight="balanced",
+        multi_class="multinomial"
+    )
+)
+
+model_l1.fit(X_train, y_train)
+
+y_pred_l1 = model_l1.predict(X_valid)
+
+print("L1 Accuracy:", model_l1.score(X_valid, y_valid))
+
+
+#%%
+cm = confusion_matrix(y_valid, y_pred_l1, labels=["GBM","LGG","Neither"])
+
+ConfusionMatrixDisplay(cm, display_labels=["GBM","LGG","Neither"]).plot()
+plt.title("L1 Model")
+plt.show()
+
+
+#%%
+model_l2 = make_pipeline(
+    StandardScaler(),
+    LogisticRegression(
+        penalty="l2",
+        solver="saga",
+        max_iter=2000,
+        class_weight="balanced",
+        multi_class="multinomial"
+    )
+)
+
+model_l2.fit(X_train, y_train)
+
+y_pred_l2 = model_l2.predict(X_valid)
+
+print("L2 Accuracy:", model_l2.score(X_valid, y_valid))
+
+#%%
+cm = confusion_matrix(y_valid, y_pred_l1, labels=["GBM","LGG","Neither"])
+
+ConfusionMatrixDisplay(cm, display_labels=["GBM","LGG","Neither"]).plot()
+plt.title("L2 Model")
+plt.show()
+
+#%%
+test_data = pd.read_csv(
+    r'C:\Users\Asma Sanaullah\OneDrive - University of Virginia\Spring 2026\COMP BME\Module-4-Cancer\data\TEST_SET_GSE62944_subsample_log2TPM.csv',
+    index_col=0
+)
+
+test_metadata = pd.read_csv(
+    r'C:\Users\Asma Sanaullah\OneDrive - University of Virginia\Spring 2026\COMP BME\Module-4-Cancer\data\TEST_SET_GSE62944_metadata.csv',
+    index_col=0
+)
+
+
+#%%
+test_samples_2c = test_metadata[
+    test_metadata["cancer_type"].isin(["GBM","LGG"])
+].index
+
+test_2c = test_data[test_samples_2c]
+test_gene_2c = test_2c.loc[gene_list]
+
+test_merged_2c = test_gene_2c.T.merge(
+    test_metadata.loc[test_samples_2c],
+    left_index=True,
+    right_index=True
+)
+
+X_test_2c = test_merged_2c[gene_list]
+y_test_2c = test_merged_2c["cancer_type"]
+
+
+
+#%%
+test_metadata["class_label"] = test_metadata["cancer_type"].apply(
+    lambda x: x if x in ["GBM","LGG"] else "Neither"
+)
+
+test_3c = test_data[test_metadata.index]
+test_gene_3c = test_3c.loc[gene_list]
+
+test_merged_3c = test_gene_3c.T.merge(
+    test_metadata,
+    left_index=True,
+    right_index=True
+)
+
+X_test_3c = test_merged_3c[gene_list]
+y_test_3c = test_merged_3c["class_label"]
+
+
+#%%
+#l1 model evaluation on test set
+y_pred_2c = model_l1.predict(X_test_2c)
+acc_2c = accuracy_score(y_test_2c, y_pred_2c)
+print("2-Class Test Accuracy:", acc_2c)
+cm_2c = confusion_matrix(y_test_2c, y_pred_2c, labels=["GBM", "LGG"])
+ConfusionMatrixDisplay(
+    confusion_matrix=cm_2c,
+    display_labels=["GBM", "LGG"]
+).plot(cmap="Blues")
+plt.title("L1 Model - 2-Class Confusion Matrix")
+plt.show()
+
+# %%
+y_pred_2c = model_l2.predict(X_test_2c)
+
+acc_2c = accuracy_score(y_test_2c, y_pred_2c)
+print("2-Class Test Accuracy:", acc_2c)
+
+cm_2c = confusion_matrix(y_test_2c, y_pred_2c, labels=["GBM", "LGG"])
+
+ConfusionMatrixDisplay(
+    confusion_matrix=cm_2c,
+    display_labels=["GBM", "LGG"]
+).plot(cmap="Blues")
+
+plt.title("L2 Model - 2-Class Confusion Matrix")
+plt.show()
+
+
+#%%
+# l1 model evaluation on test set
+y_pred_3c = model_l1.predict(X_test_3c)
+acc_3c = accuracy_score(y_test_3c, y_pred_3c)
+print("3-Class Test Accuracy:", acc_3c)
+cm_3c = confusion_matrix(
+    y_test_3c,
+    y_pred_3c,
+    labels=["GBM", "LGG", "Neither"]
+)
+ConfusionMatrixDisplay(
+    confusion_matrix=cm_3c,
+    display_labels=["GBM", "LGG", "Neither"]
+).plot(cmap="Reds")
+plt.title("L1 Model - 3-Class Confusion Matrix")
+plt.show()
+# %%
+y_pred_3c = model_l2.predict(X_test_3c)
+
+acc_3c = accuracy_score(y_test_3c, y_pred_3c)
+print("3-Class Test Accuracy:", acc_3c)
+
+cm_3c = confusion_matrix(
+    y_test_3c,
+    y_pred_3c,
+    labels=["GBM", "LGG", "Neither"]
+)
+
+ConfusionMatrixDisplay(
+    confusion_matrix=cm_3c,
+    display_labels=["GBM", "LGG", "Neither"]
+).plot(cmap="Reds")
+
+plt.title("L2 Model - 3-Class Confusion Matrix")
+plt.show()
+
+# %%
